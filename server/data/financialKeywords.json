@@ -1,0 +1,77 @@
+[
+  {
+    "term": "diversification",
+    "definition": "Spreading your investments around so you don't lose everything if one crashes.",
+    "gaming_analogy": "Like not putting all your gaming loot into just one inventory chest. Spread it out!"
+  },
+  {
+    "term": "portfolio",
+    "definition": "The total collection of all your investments.",
+    "gaming_analogy": "Your entire inventory and stash across all your characters."
+  },
+  {
+    "term": "shorting",
+    "definition": "Betting that a stock's price will go down.",
+    "gaming_analogy": "Betting against the boss; you win if they lose HP."
+  },
+  {
+    "term": "bull market",
+    "definition": "When the market is generally going up.",
+    "gaming_analogy": "Everyone has an XP boost and the server is popping off!"
+  },
+  {
+    "term": "bear market",
+    "definition": "When the market is generally going down.",
+    "gaming_analogy": "A server-wide debuff where everyone is losing gold."
+  },
+  {
+    "term": "dividend",
+    "definition": "A portion of a company's profit paid out to shareholders.",
+    "gaming_analogy": "Passive gold generation just for holding a specific item."
+  },
+  {
+    "term": "etf",
+    "definition": "A bundle of many stocks you can buy at once.",
+    "gaming_analogy": "Buying a starter pack bundle instead of unlocking items one by one."
+  },
+  {
+    "term": "ipo",
+    "definition": "The first time a company offers its shares to the public.",
+    "gaming_analogy": "Day 1 launch of a highly anticipated new MMO."
+  },
+  {
+    "term": "options",
+    "definition": "Contracts that give you the right to buy or sell a stock at a set price.",
+    "gaming_analogy": "Buying a fast-travel pass you can use later, but it expires."
+  },
+  {
+    "term": "margin",
+    "definition": "Borrowing money from your broker to buy more stock.",
+    "gaming_analogy": "Taking out a loan from an NPC to buy endgame gear."
+  },
+  {
+    "term": "p/e ratio",
+    "definition": "A ratio comparing a company's stock price to its earnings.",
+    "gaming_analogy": "The cost-to-damage ratio of a weapon; is it worth the gold?"
+  },
+  {
+    "term": "market cap",
+    "definition": "The total dollar value of all a company's shares.",
+    "gaming_analogy": "The total guild net worth combined."
+  },
+  {
+    "term": "liquidity",
+    "definition": "How easily you can buy or sell an asset without affecting its price.",
+    "gaming_analogy": "How many players are at the auction house to buy your loot instantly."
+  },
+  {
+    "term": "volatility",
+    "definition": "How wildly a stock's price swings up and down.",
+    "gaming_analogy": "A high-risk boss fight where you either get one-shot or get legendary loot."
+  },
+  {
+    "term": "blue chip",
+    "definition": "Shares of large, well-established, and financially sound companies.",
+    "gaming_analogy": "S-tier meta characters that are always reliable in any patch."
+  }
+]
