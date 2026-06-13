@@ -4,6 +4,17 @@ const stockService = require('../services/stockService');
 const { stocksLimiter } = require('../middleware/rateLimiter');
 
 router.use(stocksLimiter);
+const sendStockError = (res, error, fallbackMessage) => {
+  const statusCode = Number.isInteger(error?.statusCode) ? error.statusCode : 500;
+  const errorMessage = error?.expose ? error.message : fallbackMessage;
+
+  console.error('Stocks Route Error:', error);
+
+  return res.status(statusCode).json({
+    error: errorMessage,
+    code: error?.code || 'STOCKS_ROUTE_ERROR'
+  });
+};
 
 // @route GET /api/stocks/quote/:symbol
 router.get('/quote/:symbol', async (req, res) => {
@@ -11,7 +22,7 @@ router.get('/quote/:symbol', async (req, res) => {
     const quote = await stockService.getQuote(req.params.symbol);
     res.json(quote);
   } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch stock quote' });
+    sendStockError(res, error, 'Failed to fetch stock quote');
   }
 });
 
@@ -26,7 +37,7 @@ router.get('/search', async (req, res) => {
     const results = await stockService.searchSymbol(q);
     res.json(results);
   } catch (error) {
-    res.status(500).json({ error: 'Failed to search symbol' });
+    sendStockError(res, error, 'Failed to search symbol');
   }
 });
 
@@ -38,7 +49,7 @@ router.get('/candles/:symbol', async (req, res) => {
     const candles = await stockService.getCandles(req.params.symbol, resolution, from, to);
     res.json(candles);
   } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch stock candles' });
+    sendStockError(res, error, 'Failed to fetch stock candles');
   }
 });
 

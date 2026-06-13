@@ -1,4 +1,4 @@
-const fetch = require('node-fetch');
+const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
 
 const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
 const BASE_URL = 'https://api.elevenlabs.io/v1';
