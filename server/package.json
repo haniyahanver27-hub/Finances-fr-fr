@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node index.js",
+    "dev": "node --watch index.js",
+    "test": "node --check index.js && node --check routes/ai.js && node --check routes/sfx.js && node --check routes/stocks.js && node --check services/aiService.js && node --check services/sfxService.js && node --check services/stockService.js && node --check middleware/rateLimiter.js"
   },
   "keywords": [],
   "author": "",

@@ -8,6 +8,7 @@ dotenv.config({ path: path.join(__dirname, '.env') });
 
 const app = express();
 const PORT = process.env.PORT || 5001;
+const HOST = process.env.HOST || '127.0.0.1';
 
 // Middleware
 app.use(cors());
@@ -23,6 +24,11 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', message: 'Future Fortune Hack Express Proxy is running' });
 });
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+const server = app.listen(PORT, HOST, () => {
+  console.log(`Server running at http://${HOST}:${PORT}`);
+});
+
+server.on('error', (error) => {
+  console.error('Failed to start server:', error.message);
+  process.exit(1);
 });

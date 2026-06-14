@@ -3,6 +3,18 @@ const router = express.Router();
 const sfxService = require('../services/sfxService');
 const { ttsLimiter } = require('../middleware/rateLimiter');
 
+const sendSfxError = (res, error, fallbackMessage) => {
+  const statusCode = Number.isInteger(error?.statusCode) ? error.statusCode : 500;
+  const errorMessage = error?.expose ? error.message : fallbackMessage;
+
+  console.error('SFX Route Error:', error);
+
+  return res.status(statusCode).json({
+    error: errorMessage,
+    code: error?.code || 'SFX_ROUTE_ERROR'
+  });
+};
+
 // We still use ttsLimiter since it limits audio generation
 router.use(ttsLimiter);
 
@@ -28,7 +40,7 @@ router.post('/generate', async (req, res) => {
     });
     res.send(audioBuffer);
   } catch (error) {
-    res.status(500).json({ error: 'Failed to generate sound effect' });
+    sendSfxError(res, error, 'Failed to generate sound effect');
   }
 });
 
@@ -45,7 +57,7 @@ router.post('/trade', async (req, res) => {
     });
     res.send(audioBuffer);
   } catch (error) {
-    res.status(500).json({ error: 'Failed to generate trade sound effect' });
+    sendSfxError(res, error, 'Failed to generate trade sound effect');
   }
 });
 
@@ -62,7 +74,7 @@ router.post('/meow', async (req, res) => {
     });
     res.send(audioBuffer);
   } catch (error) {
-    res.status(500).json({ error: 'Failed to generate meow sound effect' });
+    sendSfxError(res, error, 'Failed to generate meow sound effect');
   }
 });
 
