@@ -14,8 +14,10 @@ const TabNav = ({ activeTab, setActiveTab }) => {
       {tabs.map(tab => (
         <button
           key={tab.id}
+          type="button"
           className={`tab-item ${activeTab === tab.id ? 'active' : ''}`}
           onClick={() => setActiveTab(tab.id)}
+          aria-current={activeTab === tab.id ? 'page' : undefined}
         >
           <div className="icon-wrapper">
             {tab.icon}

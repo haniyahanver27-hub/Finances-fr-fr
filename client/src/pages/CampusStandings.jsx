@@ -1,141 +1,58 @@
-import { useState, useEffect } from 'react';
-import { supabase } from '../supabaseClient';
+import { useMemo } from 'react';
+import { BookOpen, Crown, Gem, Trophy, Vote, Waves } from 'lucide-react';
+import { badgeCatalog, leaderboard } from '../data/demoContent';
 
-const CampusStandings = () => {
-  const [leaderboard, setLeaderboard] = useState([]);
-  const [userBadges, setUserBadges] = useState([]);
-  const [loading, setLoading] = useState(true);
+const iconMap = { BookOpen, Crown, Gem, Trophy, Vote, Waves };
 
-  useEffect(() => {
-    const fetchLeaderboard = async () => {
-      try {
-        // Fetch clan snapshots for leaderboard
-        const { data: snapshots } = await supabase
-          .from('clan_snapshots')
-          .select('clan_id, total_value, daily_return_pct, clans(name)')
-          .order('total_value', { ascending: false })
-          .limit(10);
+const CampusStandings = ({ portfolio, profile }) => {
+  const clanValue = useMemo(() => portfolio.cash + portfolio.positions.reduce((total, position) => (
+    total + position.quantity * position.avgPrice
+  ), 0), [portfolio]);
 
-        if (snapshots) {
-          setLeaderboard(snapshots);
-        }
-
-        // Fetch user badges
-        const session = await supabase.auth.getSession();
-        if (session?.data?.session?.user?.id) {
-          const { data: badges } = await supabase
-            .from('user_badges')
-            .select('badges(name, icon, description)')
-            .eq('user_id', session.data.session.user.id);
-
-          if (badges) {
-            setUserBadges(badges.map(b => b.badges));
-          }
-        }
-      } catch (err) {
-        console.error('Failed to fetch leaderboard:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchLeaderboard();
-  }, []);
+  const rows = leaderboard.map((row) => (
+    row.clan === 'Demo Alpha Clan'
+      ? { ...row, returnPct: Number(((clanValue - 100000) / 100000 * 100).toFixed(1)) }
+      : row
+  )).sort((a, b) => b.returnPct - a.returnPct);
 
   return (
-    <div className="animate-slide-up">
-      <h2>Campus Standings</h2>
-      
-      <div className="glass-panel" style={{padding: 'var(--space-md)', marginTop: 'var(--space-md)'}}>
-        <h3 style={{marginBottom: 'var(--space-sm)'}}>🏆 Leaderboard</h3>
-        <p className="text-muted" style={{ marginBottom: 'var(--space-md)' }}>Tracking all clans across campus</p>
-
-        {loading ? (
-          <div style={{ textAlign: 'center', padding: 'var(--space-lg)', color: 'var(--text-secondary)' }}>
-            Loading leaderboard...
-          </div>
-        ) : leaderboard.length > 0 ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
-            {leaderboard.map((clan, idx) => (
-              <div 
-                key={clan.clan_id} 
-                className="glass-panel"
-                style={{
-                  padding: 'var(--space-md)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 'var(--space-md)',
-                  borderLeft: `3px solid ${
-                    idx === 0 ? 'var(--accent-yellow)' :
-                    idx === 1 ? 'var(--accent-cyan)' :
-                    idx === 2 ? '#cd7f32' :
-                    'var(--glass-border)'
-                  }`
-                }}
-              >
-                <div style={{ fontSize: '1.5rem', fontWeight: 'bold', minWidth: '40px' }}>
-                  {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `#${idx + 1}`}
-                </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 'bold', marginBottom: '0.25rem' }}>
-                    {clan.clans?.name || 'Unknown Clan'}
-                  </div>
-                  <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                    Portfolio: ${(clan.total_value || 100000).toLocaleString('en-US', { maximumFractionDigits: 0 })}
-                  </div>
-                </div>
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ 
-                    fontSize: '1rem', 
-                    fontWeight: 'bold',
-                    color: (clan.daily_return_pct || 0) >= 0 ? 'var(--accent-green)' : 'var(--accent-red)'
-                  }}>
-                    {((clan.daily_return_pct || 0) >= 0 ? '+' : '')}{(clan.daily_return_pct || 0).toFixed(2)}%
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div style={{ textAlign: 'center', padding: 'var(--space-lg)', color: 'var(--text-secondary)' }}>
-            No clans on leaderboard yet
-          </div>
-        )}
-      </div>
-      
-      <div className="glass-panel" style={{padding: 'var(--space-md)', marginTop: 'var(--space-lg)'}}>
-        <h3 style={{marginBottom: 'var(--space-sm)'}}>👑 Your Badges</h3>
-        <div style={{display: 'flex', gap: 'var(--space-md)', flexWrap: 'wrap'}}>
-          {userBadges.length > 0 ? (
-            userBadges.map((badge, i) => (
-              <div 
-                key={i}
-                className="glass-panel"
-                style={{ 
-                  padding: 'var(--space-md)', 
-                  textAlign: 'center',
-                  minWidth: '100px',
-                  transition: 'all 0.3s'
-                }}
-              >
-                <div style={{fontSize: '2rem', marginBottom: '0.5rem'}}>
-                  {badge.icon}
-                </div>
-                <div style={{fontSize: '0.75rem', fontWeight: 'bold', marginBottom: '0.25rem'}}>
-                  {badge.name}
-                </div>
-                <div style={{fontSize: '0.65rem', color: 'var(--text-secondary)'}}>
-                  {badge.description}
-                </div>
-              </div>
-            ))
-          ) : (
-            <div style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-              Keep trading to earn badges! 🚀
-            </div>
-          )}
+    <div className="standings-page animate-slide-up">
+      <header className="page-heading">
+        <div>
+          <p className="eyebrow">Campus Arena</p>
+          <h2>Standings</h2>
         </div>
-      </div>
+        <span className="delay-pill">refreshes every 60s</span>
+      </header>
+
+      <section className="leaderboard-list">
+        {rows.map((row, index) => (
+          <article key={row.clan} className={row.clan === profile?.clans?.name ? 'rank-row current' : 'rank-row'}>
+            <div className="rank-number">#{index + 1}</div>
+            <div className="rank-main">
+              <strong>{row.clan}</strong>
+              <span>{row.campus}</span>
+            </div>
+            <div className={row.returnPct >= 0 ? 'rank-return positive' : 'rank-return negative'}>
+              {row.returnPct >= 0 ? '+' : ''}{row.returnPct}%
+            </div>
+          </article>
+        ))}
+      </section>
+
+      <section className="badge-grid" aria-label="Badges">
+        {badgeCatalog.map((badge, index) => {
+          const Icon = iconMap[badge.icon] || Trophy;
+          const earned = index < 2 || portfolio.trades.length > 0;
+          return (
+            <article key={badge.name} className={earned ? 'badge-card earned' : 'badge-card'}>
+              <Icon size={22} />
+              <strong>{badge.name}</strong>
+              <span>{badge.description}</span>
+            </article>
+          );
+        })}
+      </section>
     </div>
   );
 };

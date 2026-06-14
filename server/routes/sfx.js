@@ -21,22 +21,64 @@ router.use(ttsLimiter);
 // @route POST /api/sfx/generate
 // @desc Generate an arbitrary sound effect
 router.post('/generate', async (req, res) => {
-  const { text } = req.body;
+  const { text, durationSeconds, promptInfluence } = req.body || {};
+  const cleanText = typeof text === 'string' ? text.trim() : '';
   
-  if (!text) {
+  if (!cleanText) {
     return res.status(400).json({ error: 'Text prompt is required' });
+  }
+  if (cleanText.length > 600) {
+    return res.status(400).json({ error: 'Text prompt must be 600 characters or fewer' });
+  }
+
+  const duration = Number(durationSeconds ?? 2);
+  const influence = Number(promptInfluence ?? 0.3);
+  if (!Number.isFinite(duration) || duration < 0.5 || duration > 22) {
+    return res.status(400).json({ error: 'Duration must be between 0.5 and 22 seconds' });
+  }
+  if (!Number.isFinite(influence) || influence < 0 || influence > 1) {
+    return res.status(400).json({ error: 'Prompt influence must be between 0 and 1' });
   }
 
   try {
-    const audioBuffer = await sfxService.generateSoundEffect(text);
+    const audioBuffer = await sfxService.generateSoundEffect(
+      cleanText,
+      duration,
+      influence
+    );
     
     res.set({
-      'Content-Type': 'audio/mpeg',
+      'Content-Type': audioBuffer.contentType || 'audio/mpeg',
       'Content-Length': audioBuffer.length,
+      'X-Audio-Provider': audioBuffer.provider || 'elevenlabs'
     });
     res.send(audioBuffer);
   } catch (error) {
     sendSfxError(res, error, 'Failed to generate sound effect');
+  }
+});
+
+// @route POST /api/sfx/tts
+// @desc Generate Alpha Meow speech with ElevenLabs
+router.post('/tts', async (req, res) => {
+  const { text, voiceId } = req.body || {};
+  const cleanText = typeof text === 'string' ? text.trim() : '';
+
+  if (!cleanText) {
+    return res.status(400).json({ error: 'Text is required' });
+  }
+
+  try {
+    const audioBuffer = await sfxService.textToSpeech(cleanText.slice(0, 600), voiceId);
+
+    res.set({
+      'Content-Type': audioBuffer.contentType || 'audio/mpeg',
+      'Content-Length': audioBuffer.length,
+      'X-Audio-Provider': audioBuffer.provider || 'elevenlabs'
+    });
+    res.send(audioBuffer);
+  } catch (error) {
+    res.status(500).json({ error: error.message.includes('ELEVENLABS_API_KEY') ? 'ELEVENLABS_API_KEY is missing' : 'Failed to generate speech' });
   }
 });
 
@@ -48,8 +90,9 @@ router.post('/trade', async (req, res) => {
     const audioBuffer = await sfxService.generateSoundEffect(prompt);
     
     res.set({
-      'Content-Type': 'audio/mpeg',
+      'Content-Type': audioBuffer.contentType || 'audio/mpeg',
       'Content-Length': audioBuffer.length,
+      'X-Audio-Provider': audioBuffer.provider || 'elevenlabs'
     });
     res.send(audioBuffer);
   } catch (error) {
@@ -65,8 +108,9 @@ router.post('/meow', async (req, res) => {
     const audioBuffer = await sfxService.generateSoundEffect(prompt);
     
     res.set({
-      'Content-Type': 'audio/mpeg',
+      'Content-Type': audioBuffer.contentType || 'audio/mpeg',
       'Content-Length': audioBuffer.length,
+      'X-Audio-Provider': audioBuffer.provider || 'elevenlabs'
     });
     res.send(audioBuffer);
   } catch (error) {

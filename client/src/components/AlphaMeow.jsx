@@ -1,47 +1,104 @@
 import { useState } from 'react';
-import { MessageCircle } from 'lucide-react';
-import { fetchAlphaMeowReply, playAlphaMeowSound } from '../utils/alphaMeow';
+import { MessageCircle, Send, Volume2, X } from 'lucide-react';
+import alphaMeow from '../assets/alpha meow.png';
+import { apiAudio, apiJson } from '../api';
 
-const AlphaMeow = () => {
-  const [isOpen, setIsOpen] = useState(false);
-  const [isThinking, setIsThinking] = useState(false);
-  const [reply, setReply] = useState('Tap Alpha Meow for a quick finance power-up.');
-  const [tries, setTries] = useState(0);
+const fallbackAnswer = 'Alpha Meow is in offline mode: diversify your loot, size your bets, and never full-send without a vote.';
 
-  const askAlphaMeow = async () => {
-    const nextTry = tries + 1;
-    setTries(nextTry);
-    setIsOpen(true);
-    setIsThinking(true);
+const AlphaMeow = ({ context = [] }) => {
+  const [open, setOpen] = useState(false);
+  const [question, setQuestion] = useState('');
+  const [messages, setMessages] = useState([
+    { role: 'assistant', content: 'Tap me when finance words start looking like boss mechanics.' }
+  ]);
+  const [loading, setLoading] = useState(false);
 
-    const prompt = `Give me one finance tip. Attempt ${nextTry}.`;
-    playAlphaMeowSound();
-    const nextReply = await fetchAlphaMeowReply(prompt, []);
+  const askAlpha = async (event) => {
+    event.preventDefault();
+    if (!question.trim()) return;
 
-    setReply(nextReply);
-    setIsThinking(false);
+    const userMessage = question.trim();
+    setQuestion('');
+    setMessages((current) => [...current, { role: 'user', content: userMessage }]);
+    setLoading(true);
+
+    try {
+      const conversationContext = [
+        ...context,
+        ...messages.map((message) => ({
+          content: message.content,
+          is_ai: message.role === 'assistant',
+          role: message.role
+        }))
+      ].slice(-8);
+      const data = await apiJson('/api/ai/chat', {
+        method: 'POST',
+        body: JSON.stringify({ message: userMessage, context: conversationContext })
+      });
+      setMessages((current) => [...current, { role: 'assistant', content: data.reply || fallbackAnswer }]);
+    } catch {
+      setMessages((current) => [...current, { role: 'assistant', content: fallbackAnswer }]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const playVoice = async (text) => {
+    try {
+      const blob = await apiAudio('/api/sfx/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text })
+      });
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      audio.addEventListener('ended', () => URL.revokeObjectURL(url), { once: true });
+      await audio.play();
+    } catch {
+      window.speechSynthesis?.speak(new SpeechSynthesisUtterance(text));
+    }
   };
 
   return (
     <>
-      {isOpen && (
-        <section className="meow-chat-panel glass-panel" aria-live="polite">
+      {open && (
+        <aside className="meow-chat-panel glass-panel" aria-label="Alpha Meow assistant">
           <div className="meow-panel-header">
-            <strong>Alpha Meow</strong>
-            <span>{tries} {tries === 1 ? 'try' : 'tries'}</span>
+            <div>
+              <strong>Alpha Meow</strong>
+              <span>AI coach</span>
+            </div>
+            <button className="icon-button" type="button" onClick={() => setOpen(false)} aria-label="Close Alpha Meow">
+              <X size={18} />
+            </button>
           </div>
-          <p>{isThinking ? 'Loading the next lesson...' : reply}</p>
-        </section>
+
+          <div className="meow-messages" aria-live="polite">
+            {messages.map((message, index) => (
+              <div key={`${message.role}-${index}`} className={`meow-bubble ${message.role}`}>
+                <span>{message.content}</span>
+                {message.role === 'assistant' && (
+                  <button type="button" className="voice-button" onClick={() => playVoice(message.content)} aria-label="Play Alpha Meow voice">
+                    <Volume2 size={15} />
+                  </button>
+                )}
+              </div>
+            ))}
+            {loading && <div className="meow-bubble assistant">Loading the next strat...</div>}
+          </div>
+
+          <form className="meow-form" onSubmit={askAlpha}>
+            <input value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="Ask a trading question" maxLength={1200} />
+            <button className="btn btn-primary icon-only" type="submit" aria-label="Ask Alpha Meow" disabled={loading || !question.trim()}>
+              <Send size={18} />
+            </button>
+          </form>
+        </aside>
       )}
 
-      <button
-        type="button"
-        className={`alpha-meow-widget ${isThinking ? 'thinking' : ''}`}
-        onClick={askAlphaMeow}
-        aria-label="Ask Alpha Meow"
-        title="Ask Alpha Meow"
-      >
-        <MessageCircle size={34} aria-hidden="true" />
+      <button className="alpha-meow-widget" type="button" onClick={() => setOpen((value) => !value)} aria-label={open ? 'Close Alpha Meow' : 'Open Alpha Meow'}>
+        <img src={alphaMeow} alt="" />
+        <MessageCircle size={18} />
       </button>
     </>
   );

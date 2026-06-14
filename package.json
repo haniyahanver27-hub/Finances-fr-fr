@@ -1,6 +1,18 @@
 {
+  "scripts": {
+    "dev": "concurrently \"npm run dev:client\" \"npm run dev:server\"",
+    "dev:client": "cd client && npm run dev",
+    "dev:server": "cd server && npm run dev",
+    "build": "cd client && npm run build",
+    "lint": "cd client && npm run lint",
+    "test": "cd server && npm test",
+    "check": "npm run lint && npm run test && npm run build",
+    "start": "cd server && npm start",
+    "install:all": "npm install && cd client && npm install && cd ../server && npm install"
+  },
   "dependencies": {
     "@supabase/ssr": "^0.12.0",
-    "@supabase/supabase-js": "^2.108.1"
+    "@supabase/supabase-js": "^2.108.1",
+    "concurrently": "^8.2.2"
   }
 }

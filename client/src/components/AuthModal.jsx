@@ -29,19 +29,17 @@ const AuthModal = ({ onAuthSuccess, onDemoLogin }) => {
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
+          options: {
+            data: { username: username.trim() }
+          }
         });
         if (error) throw error;
-        
-        // Create profile
-        if (data.user) {
-          const { error: profileError } = await supabase
-            .from('profiles')
-            .insert([
-              { id: data.user.id, username }
-            ]);
-          if (profileError) throw profileError;
+
+        if (!data.session) {
+          setError('Check your email to confirm your account, then log in.');
+          setIsLogin(true);
+          return;
         }
-        
         onAuthSuccess();
       }
     } catch (err) {
@@ -95,25 +93,26 @@ const AuthModal = ({ onAuthSuccess, onDemoLogin }) => {
         </form>
 
         <div style={{ marginTop: 'var(--space-lg)', textAlign: 'center' }}>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', marginBottom: 'var(--space-sm)' }}>— OR —</p>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', marginBottom: 'var(--space-sm)' }}>OR</p>
           <button 
             type="button" 
             className="btn btn-secondary" 
             style={{ width: '100%' }}
             onClick={onDemoLogin}
           >
-            🚀 Login as Demo User (Instant)
+            Login as Demo User
           </button>
         </div>
 
         <p style={{ textAlign: 'center', marginTop: 'var(--space-lg)', fontSize: '0.875rem' }}>
           {isLogin ? "Don't have an account? " : "Already have an account? "}
-          <span 
+          <button
+            type="button"
             className="jargon-highlight" 
             onClick={() => setIsLogin(!isLogin)}
           >
             {isLogin ? 'Register here' : 'Login here'}
-          </span>
+          </button>
         </p>
       </div>
     </div>

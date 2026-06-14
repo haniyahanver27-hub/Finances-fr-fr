@@ -4,8 +4,8 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "dev": "node --watch index.js",
-    "test": "node --check index.js && node --check routes/ai.js && node --check routes/sfx.js && node --check routes/stocks.js && node --check services/aiService.js && node --check services/sfxService.js && node --check services/stockService.js && node --check middleware/rateLimiter.js"
+    "dev": "node index.js",
+    "test": "node --test"
   },
   "keywords": [],
   "author": "",

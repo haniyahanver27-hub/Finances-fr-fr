@@ -1,16 +1,12 @@
 import { useState } from 'react';
 import { supabase } from '../supabaseClient';
 
-const ClanSetup = ({ user, onClanJoined }) => {
+const ClanSetup = ({ onClanJoined }) => {
   const [isCreating, setIsCreating] = useState(false);
   const [clanName, setClanName] = useState('');
   const [inviteCode, setInviteCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-
-  const generateInviteCode = () => {
-    return Math.random().toString(36).substring(2, 8).toUpperCase();
-  };
 
   const handleCreateClan = async (e) => {
     e.preventDefault();
@@ -18,24 +14,10 @@ const ClanSetup = ({ user, onClanJoined }) => {
     setError('');
 
     try {
-      const code = generateInviteCode();
-      
-      // Insert clan
       const { data: clanData, error: clanError } = await supabase
-        .from('clans')
-        .insert([{ name: clanName, invite_code: code }])
-        .select()
+        .rpc('create_clan', { clan_name: clanName.trim() })
         .single();
-        
       if (clanError) throw clanError;
-
-      // Update user profile with clan_id
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .update({ clan_id: clanData.id })
-        .eq('id', user.id);
-        
-      if (profileError) throw profileError;
 
       onClanJoined(clanData);
     } catch (err) {
@@ -51,24 +33,10 @@ const ClanSetup = ({ user, onClanJoined }) => {
     setError('');
 
     try {
-      // Find clan by invite code
-      const { data: clans, error: fetchError } = await supabase
-        .from('clans')
-        .select('*')
-        .eq('invite_code', inviteCode.toUpperCase());
-        
-      if (fetchError) throw fetchError;
-      if (!clans || clans.length === 0) throw new Error('Invalid invite code');
-      
-      const clan = clans[0];
-
-      // Update user profile
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .update({ clan_id: clan.id })
-        .eq('id', user.id);
-        
-      if (profileError) throw profileError;
+      const { data: clan, error: joinError } = await supabase
+        .rpc('join_clan', { invite_code_input: inviteCode.trim() })
+        .single();
+      if (joinError) throw joinError;
 
       onClanJoined(clan);
     } catch (err) {

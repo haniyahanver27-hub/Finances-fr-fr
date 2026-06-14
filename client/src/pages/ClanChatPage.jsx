@@ -1,102 +1,77 @@
-import { useState, useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Check, Play, Plus, Send, X } from 'lucide-react';
 import { supabase } from '../supabaseClient';
-import { Play } from 'lucide-react';
-import { fetchAlphaMeowReply, playAlphaMeowSound } from '../utils/alphaMeow';
+import { financialKeywords, localJargon } from '../data/demoContent';
+import { apiAudio, apiJson } from '../api';
 
-const FINANCIAL_KEYWORDS = ['diversification', 'portfolio', 'shorting', 'bull market', 'bear market', 'dividend', 'etf', 'ipo', 'options', 'margin', 'volatility'];
+const clanSize = 3;
+let localId = 0;
+const nextLocalId = (prefix) => {
+  localId += 1;
+  return `${prefix}-${localId}`;
+};
 
-const ClanChatPage = ({ session, profile }) => {
-  const [messages, setMessages] = useState([]);
+const formatMoney = (value) => new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: 'USD',
+  maximumFractionDigits: 0
+}).format(value);
+
+const ClanChatPage = ({
+  session,
+  profile,
+  portfolio,
+  setPortfolio,
+  tradeProposals,
+  setTradeProposals,
+  watchlist,
+  demoMessages,
+  setDemoMessages,
+  isDemo
+}) => {
+  const [remoteMessages, setRemoteMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
-  const [keywords, setKeywords] = useState(FINANCIAL_KEYWORDS);
-  const [clanBalance, setClanBalance] = useState(100000);
-  const [positions, setPositions] = useState([]);
-  const [activeVotes, setActiveVotes] = useState({});
-  const [userVotes, setUserVotes] = useState({});
+  const [selectedJargon, setSelectedJargon] = useState(null);
+  const [showTradeWizard, setShowTradeWizard] = useState(false);
+  const [tradeDraft, setTradeDraft] = useState({ symbol: 'NVDA', action: 'Buy', orderPct: 5 });
+  const [actionError, setActionError] = useState('');
   const messagesEndRef = useRef(null);
-  const localIdRef = useRef(0);
+  const messages = isDemo ? demoMessages : remoteMessages;
 
   const clanId = profile?.clan_id;
-  const isDemo = session?.user?.id?.startsWith('demo-');
+  const clanName = profile?.clans?.name || 'Demo Alpha Clan';
+  const userId = session?.user?.id || 'demo-123';
+  const currentUser = profile?.username || 'DemoTrader';
 
-  const nextLocalId = (prefix) => {
-    localIdRef.current += 1;
-    return `${prefix}-${localIdRef.current}`;
-  };
+  const positionValue = useMemo(() => portfolio.positions.reduce((total, position) => {
+    const quote = watchlist.find((item) => item.symbol === position.symbol);
+    return total + position.quantity * (quote?.price || position.avgPrice);
+  }, 0), [portfolio.positions, watchlist]);
 
-  // Load keywords and initial messages
+  const totalValue = portfolio.cash + positionValue;
+  const dailyReturn = 5.7;
+
   useEffect(() => {
+    if (isDemo) return;
     if (!clanId) return;
 
-    if (isDemo) {
-      const fetchDemoData = async () => {
-        setMessages([
-          {
-            id: 'demo-alpha-welcome',
-            content: 'Alpha Meow is awake. Try @alphameow with any finance question.',
-            is_ai: true,
-          },
-        ]);
-      };
-
-      fetchDemoData();
-      return;
-    }
-
     const fetchInitialData = async () => {
-      // 1. Fetch keywords from backend proxy (which reads financialKeywords.json)
-      try {
-        // We'll just fetch a static array we could host or define, but let's assume we fetch them
-        // For now, let's just use a hardcoded list of terms to highlight to save a fetch, or fetch them if needed
-        // The PRD says "parses text for known keywords from a local array client-side"
-        // I will define a small client-side dictionary of terms to parse:
-        setKeywords(FINANCIAL_KEYWORDS);
-      } catch {
-        console.error("Failed to load keywords");
-      }
-
-      // 2. Fetch clan portfolio data
-      try {
-        const posRes = await fetch(`/api/trades/positions/${clanId}`);
-        const posData = await posRes.json();
-        if (posData.cash !== undefined) setClanBalance(posData.cash);
-        if (posData.positions) setPositions(posData.positions);
-      } catch (err) {
-        console.error("Failed to fetch positions:", err);
-      }
-
-      // 3. Fetch active trade proposals
-      try {
-        const propsRes = await fetch(`/api/trades/proposals/${clanId}`);
-        const propsData = await propsRes.json();
-        if (propsData.proposals) {
-          const voteMap = {};
-          propsData.proposals.forEach(p => {
-            voteMap[p.id] = { yes: 0, no: 0, total: 0 };
-          });
-          setActiveVotes(voteMap);
-        }
-      } catch (err) {
-        console.error("Failed to fetch proposals:", err);
-      }
-
-      // 4. Fetch last 50 messages
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('messages')
-        .select(`
-          id, content, timestamp, is_ai, user_id,
-          profiles (username)
-        `)
+        .select('id, content, timestamp, is_ai, user_id, message_type, profiles (username)')
         .eq('clan_id', clanId)
         .order('timestamp', { ascending: true })
         .limit(50);
-        
-      if (data) setMessages(data);
+
+      if (error) {
+        setActionError(error.message);
+        return;
+      }
+      setRemoteMessages(data || []);
     };
 
     fetchInitialData();
 
-    // 3. Subscribe to new messages
     const channel = supabase
       .channel(`room:${clanId}`)
       .on('postgres_changes', {
@@ -105,18 +80,19 @@ const ClanChatPage = ({ session, profile }) => {
         table: 'messages',
         filter: `clan_id=eq.${clanId}`
       }, async (payload) => {
-        // Fetch the username for the new message
         if (payload.new.user_id) {
           const { data } = await supabase
             .from('profiles')
             .select('username')
             .eq('id', payload.new.user_id)
             .single();
-          
+
           payload.new.profiles = data;
         }
-        
-        setMessages(prev => [...prev, payload.new]);
+
+        setRemoteMessages((current) => current.some((message) => message.id === payload.new.id)
+          ? current
+          : [...current, payload.new]);
       })
       .subscribe();
 
@@ -125,152 +101,97 @@ const ClanChatPage = ({ session, profile }) => {
     };
   }, [clanId, isDemo]);
 
-  // Auto-scroll
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [messages, tradeProposals]);
 
-  const sendMessage = async (e) => {
-    e.preventDefault();
+  const appendDemoMessage = (message) => {
+    const next = { id: nextLocalId('message'), ...message };
+    setDemoMessages((current) => [...current, next]);
+  };
+
+  const sendMessage = async (event) => {
+    event.preventDefault();
     if (!newMessage.trim() || !clanId) return;
 
-    const content = newMessage;
+    const content = newMessage.trim();
     setNewMessage('');
-    const localUserMessage = {
-      id: nextLocalId('local-user'),
-      clan_id: clanId,
-      user_id: session.user.id,
-      content,
-      is_ai: false,
-      profiles: { username: profile?.username },
-    };
+    setActionError('');
 
     if (isDemo) {
-      setMessages(prev => [...prev, localUserMessage]);
-    }
-
-    // 1. Insert user message to DB
-    if (!isDemo) {
+      appendDemoMessage({
+        user_id: userId,
+        profiles: { username: currentUser },
+        content,
+        is_ai: false
+      });
+    } else {
       const { error } = await supabase.from('messages').insert([{
         clan_id: clanId,
-        user_id: session.user.id,
-        content: content,
+        user_id: userId,
+        content,
         is_ai: false
       }]);
 
       if (error) {
-        console.error('Error sending message:', error);
-        setMessages(prev => [...prev, localUserMessage]);
+        setNewMessage(content);
+        setActionError(error.message);
+        return;
       }
     }
 
-    // 2. If message mentions @alphameow, call AI
     if (content.toLowerCase().includes('@alphameow')) {
-      playAlphaMeowSound();
-      const reply = await fetchAlphaMeowReply(content, messages.slice(-5));
+      try {
+        const data = await apiJson('/api/ai/chat', {
+          method: 'POST',
+          body: JSON.stringify({ message: content, context: messages.slice(-5) })
+        });
+        const reply = data.reply || 'Alpha Meow says: size the trade, vote together, then commit.';
 
-      if (reply) {
         if (isDemo) {
-          setMessages(prev => [...prev, {
-            id: nextLocalId('local-alpha'),
-            clan_id: clanId,
-            content: reply,
-            is_ai: true,
-          }]);
+          appendDemoMessage({ content: reply, is_ai: true });
         } else {
-          await supabase.from('messages').insert([{
-            clan_id: clanId,
-            content: reply,
-            is_ai: true
-          }]);
+          await supabase.from('messages').insert([{ clan_id: clanId, user_id: userId, content: reply, is_ai: true }]);
+        }
+      } catch {
+        if (isDemo) {
+          appendDemoMessage({ content: 'Alpha Meow is offline, but the strategy still stands: vote before sending it.', is_ai: true });
+        } else {
+          setActionError('Alpha Meow is offline right now.');
         }
       }
     }
   };
 
   const handleJargonTap = async (term) => {
+    setSelectedJargon({ term, explanation: localJargon[term.toLowerCase()] || 'Loading the quick strat...' });
+
     try {
-      const response = await fetch('/api/ai/jargon', {
+      const data = await apiJson('/api/ai/jargon', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ term })
       });
-      const data = await response.json();
-      
-      const alphaMessageContent = {
-        clan_id: clanId,
-        content: `**${data.term.toUpperCase()}**: ${data.definition ? data.definition + " " : ""}${data.analogy}`,
-        is_ai: true
-      };
-
-      const alphaMessage = {
-        id: nextLocalId('local-jargon'),
-        ...alphaMessageContent
-      };
-
-      if (isDemo) {
-        setMessages(prev => [...prev, alphaMessage]);
-      } else {
-        await supabase.from('messages').insert([alphaMessageContent]);
-      }
-
-      // Trigger SFX (Meow)
-      playAlphaMeowSound();
-    } catch (err) {
-      console.error("Failed to explain jargon", err);
+      const explanation = [data.definition, data.analogy].filter(Boolean).join(' ');
+      setSelectedJargon({ term: data.term || term, explanation: explanation || localJargon[term.toLowerCase()] });
+    } catch {
+      setSelectedJargon({ term, explanation: localJargon[term.toLowerCase()] || 'Finance term unlocked: ask Alpha Meow for a deeper breakdown.' });
     }
   };
 
-  const handleVote = async (proposalId, voteYes) => {
-    try {
-      const response = await fetch('/api/trades/vote', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          proposal_id: proposalId,
-          user_id: session.user.id,
-          vote: voteYes
-        })
-      });
-      const data = await response.json();
-      
-      if (response.ok) {
-        setUserVotes(prev => ({ ...prev, [proposalId]: voteYes }));
-        if (data.voteCount) {
-          setActiveVotes(prev => ({
-            ...prev,
-            [proposalId]: data.voteCount
-          }));
-        }
-        if (data.proposalStatus === 'passed') {
-          playAlphaMeowSound();
-        }
-      }
-    } catch (err) {
-      console.error("Failed to vote:", err);
-    }
-  };
-
-  // Helper to highlight jargon in text
   const parseContent = (content) => {
     if (!content) return '';
     let parsedContent = [content];
 
-    keywords.forEach(keyword => {
-      const regex = new RegExp(`\\b(${keyword})\\b`, 'gi');
-      parsedContent = parsedContent.flatMap(part => {
+    financialKeywords.forEach((keyword) => {
+      const regex = new RegExp(`\\b(${keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})\\b`, 'gi');
+      parsedContent = parsedContent.flatMap((part) => {
         if (typeof part !== 'string') return [part];
-        const pieces = part.split(regex);
-        return pieces.map((piece, i) => {
+        return part.split(regex).map((piece, index) => {
           if (piece.toLowerCase() === keyword.toLowerCase()) {
             return (
-              <span 
-                key={`${keyword}-${i}`} 
-                className="jargon-highlight"
-                onClick={() => handleJargonTap(keyword)}
-              >
+              <button key={`${keyword}-${index}-${piece}`} className="jargon-highlight" type="button" onClick={() => handleJargonTap(keyword)}>
                 {piece}
-              </span>
+              </button>
             );
           }
           return piece;
@@ -281,102 +202,210 @@ const ClanChatPage = ({ session, profile }) => {
     return parsedContent;
   };
 
+  const proposeTrade = (event) => {
+    event.preventDefault();
+    const symbol = tradeDraft.symbol.trim().toUpperCase();
+    if (!symbol) return;
+
+    const proposal = {
+      id: nextLocalId(`proposal-${symbol}`),
+      proposer: currentUser,
+      symbol,
+      action: tradeDraft.action,
+      orderPct: Number(tradeDraft.orderPct),
+      approvals: [userId],
+      denials: [],
+      status: 'open'
+    };
+
+    setTradeProposals((current) => [proposal, ...current]);
+    appendDemoMessage({
+      content: `${currentUser} initiated a vote to ${proposal.action.toUpperCase()} ${proposal.orderPct}% ${proposal.symbol}`,
+      is_ai: true,
+      message_type: 'trade_alert'
+    });
+    setShowTradeWizard(false);
+  };
+
+  const executeTrade = (proposal) => {
+    const quote = watchlist.find((item) => item.symbol === proposal.symbol) || { price: 100 };
+    const tradeSize = Math.min(portfolio.cash, totalValue * (proposal.orderPct / 100));
+    const quantity = proposal.action === 'Buy' ? tradeSize / quote.price : 0;
+
+    setPortfolio((current) => {
+      if (proposal.action === 'Buy') {
+        const existing = current.positions.find((position) => position.symbol === proposal.symbol);
+        const nextPositions = existing
+          ? current.positions.map((position) => position.symbol === proposal.symbol
+            ? {
+                ...position,
+                quantity: position.quantity + quantity,
+                avgPrice: ((position.quantity * position.avgPrice) + tradeSize) / (position.quantity + quantity)
+              }
+            : position)
+          : [...current.positions, { symbol: proposal.symbol, quantity, avgPrice: quote.price }];
+
+        return {
+          ...current,
+          cash: current.cash - tradeSize,
+          positions: nextPositions,
+          trades: [{ ...proposal, quantity, price: quote.price, timestamp: new Date().toISOString() }, ...current.trades]
+        };
+      }
+
+      return {
+        ...current,
+        trades: [{ ...proposal, quantity: 0, price: quote.price, timestamp: new Date().toISOString() }, ...current.trades]
+      };
+    });
+
+    appendDemoMessage({
+      content: `Trade executed: ${proposal.action.toUpperCase()} ${proposal.symbol} at ${formatMoney(quote.price)}. Alpha Meow says the loot moved.`,
+      is_ai: true,
+      message_type: 'vote_result'
+    });
+
+    apiAudio('/api/sfx/trade', { method: 'POST' })
+      .then((blob) => {
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+        audio.addEventListener('ended', () => URL.revokeObjectURL(url), { once: true });
+        return audio.play();
+      })
+      .catch(() => {});
+  };
+
+  const castVote = (proposalId, approve) => {
+    let proposalToExecute = null;
+
+    setTradeProposals((current) => current.map((proposal) => {
+      if (proposal.id !== proposalId || proposal.status !== 'open') return proposal;
+
+      const approvals = new Set(proposal.approvals);
+      const denials = new Set(proposal.denials);
+      approvals.delete(userId);
+      denials.delete(userId);
+      approve ? approvals.add(userId) : denials.add(userId);
+
+      const updated = {
+        ...proposal,
+        approvals: [...approvals],
+        denials: [...denials]
+      };
+
+      if (updated.approvals.length / clanSize > 0.5) {
+        const passed = { ...updated, status: 'passed' };
+        proposalToExecute = passed;
+        return passed;
+      }
+
+      if (updated.denials.length / clanSize >= 0.5) {
+        return { ...updated, status: 'failed' };
+      }
+
+      return updated;
+    }));
+
+    if (proposalToExecute) {
+      executeTrade(proposalToExecute);
+    }
+  };
+
   if (!clanId) {
-    return <div style={{padding: '2rem', textAlign: 'center'}}>Join a clan to see the chat!</div>;
+    return <div className="empty-state">Join a clan to see the chat.</div>;
   }
 
   return (
-    <div className="animate-slide-up" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <div className="glass-panel" style={{padding: 'var(--space-sm) var(--space-md)', marginBottom: 'var(--space-md)'}}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-sm)' }}>
-          <div>
-            <h3 style={{fontSize: '1.2rem', margin: 0}}>{profile.clans?.name || 'Clan'}</h3>
-            <p className="text-muted" style={{fontSize: '0.8rem', margin: '4px 0 0 0'}}>Invite Code: <strong>{profile.clans?.invite_code}</strong></p>
-          </div>
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Portfolio Value</div>
-            <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: 'var(--accent-green)' }}>
-              ${clanBalance?.toLocaleString('en-US', { maximumFractionDigits: 2 })}
-            </div>
-          </div>
+    <div className="chat-page animate-slide-up">
+      <header className="clan-header">
+        <div>
+          <p className="eyebrow">{clanName}</p>
+          <h2>{formatMoney(totalValue)} Clan Capital</h2>
+          <span>Cash {formatMoney(portfolio.cash)} · Daily {dailyReturn > 0 ? '+' : ''}{dailyReturn}%</span>
         </div>
-        {positions.length > 0 && (
-          <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-            Holdings: {positions.map(p => `${p.quantity.toFixed(2)} ${p.symbol}`).join(', ')}
+        <button className="btn btn-primary" type="button" onClick={() => setShowTradeWizard(true)}>
+          <Plus size={18} />
+          <span>Trade</span>
+        </button>
+      </header>
+
+      <section className="buster-briefing">
+        <strong>Buster&apos;s Briefing</strong>
+        <p>{selectedJargon ? `${selectedJargon.term.toUpperCase()}: ${selectedJargon.explanation}` : 'Tap highlighted words to bust jargon without leaving the chat.'}</p>
+      </section>
+      {actionError && <div className="form-error" role="alert">{actionError}</div>}
+
+      {showTradeWizard && (
+        <form className="trade-wizard glass-panel" onSubmit={proposeTrade}>
+          <div className="wizard-grid">
+            <label>
+              <span>Ticker</span>
+              <input value={tradeDraft.symbol} onChange={(event) => setTradeDraft((draft) => ({ ...draft, symbol: event.target.value }))} />
+            </label>
+            <label>
+              <span>Action</span>
+              <select value={tradeDraft.action} onChange={(event) => setTradeDraft((draft) => ({ ...draft, action: event.target.value }))}>
+                <option>Buy</option>
+                <option>Sell</option>
+              </select>
+            </label>
+            <label>
+              <span>Cash %</span>
+              <input type="number" min="1" max="40" value={tradeDraft.orderPct} onChange={(event) => setTradeDraft((draft) => ({ ...draft, orderPct: event.target.value }))} />
+            </label>
           </div>
-        )}
-      </div>
-      
-      <div className="chat-container" style={{ flex: 1, overflowY: 'auto', marginBottom: 'var(--space-md)' }}>
+          <div className="wizard-actions">
+            <button className="btn btn-secondary" type="button" onClick={() => setShowTradeWizard(false)}>
+              <X size={18} />
+              <span>Cancel</span>
+            </button>
+            <button className="btn btn-primary" type="submit">
+              <Play size={18} />
+              <span>Propose</span>
+            </button>
+          </div>
+        </form>
+      )}
+
+      <div className="chat-container">
+        {tradeProposals.map((proposal) => (
+          <article key={proposal.id} className={`vote-card ${proposal.status}`}>
+            <div>
+              <strong>{proposal.proposer} proposed {proposal.action.toUpperCase()} {proposal.symbol}</strong>
+              <span>{proposal.orderPct}% of clan capital · majority needs 2 of 3</span>
+            </div>
+            <div className="vote-meter">
+              <span style={{ width: `${(proposal.approvals.length / clanSize) * 100}%` }} />
+            </div>
+            <div className="vote-buttons">
+              <button className="btn btn-approve" type="button" onClick={() => castVote(proposal.id, true)} disabled={proposal.status !== 'open'}>
+                <Check size={16} />
+                <span>Approve ({proposal.approvals.length})</span>
+              </button>
+              <button className="btn btn-deny" type="button" onClick={() => castVote(proposal.id, false)} disabled={proposal.status !== 'open'}>
+                <X size={16} />
+                <span>Deny ({proposal.denials.length})</span>
+              </button>
+            </div>
+          </article>
+        ))}
+
         {messages.map((msg) => (
-          <div key={msg.id}>
-            {msg.message_type === 'vote_result' && (
-              <div className="glass-panel" style={{ padding: 'var(--space-sm)', marginBottom: 'var(--space-md)', backgroundColor: 'rgba(16, 185, 129, 0.1)' }}>
-                <div style={{ fontSize: '0.85rem' }}>{msg.content}</div>
-              </div>
+          <div key={msg.id} className={`chat-message ${msg.is_ai ? 'ai' : (msg.user_id === userId ? 'self' : 'other')}`}>
+            {!msg.is_ai && msg.user_id !== userId && (
+              <div className="message-author">{msg.profiles?.username || 'Unknown Trader'}</div>
             )}
-            {msg.message_type === 'trade_alert' && !msg.content.includes('Vote PASSED') && !msg.content.includes('Vote FAILED') && (
-              <div className="vote-card glass-panel" style={{ padding: 'var(--space-md)', marginBottom: 'var(--space-md)' }}>
-                <div style={{ fontSize: '0.9rem', fontWeight: 'bold', marginBottom: 'var(--space-sm)' }}>
-                  {msg.content}
-                </div>
-                {activeVotes[msg.id]?.total < 3 && !userVotes[msg.id] && (
-                  <div className="vote-buttons">
-                    <button 
-                      className="btn btn-primary" 
-                      onClick={() => handleVote(msg.id, true)}
-                      style={{ fontSize: '0.85rem', padding: '0.4rem' }}
-                    >
-                      ✅ Approve
-                    </button>
-                    <button 
-                      className="btn btn-secondary" 
-                      onClick={() => handleVote(msg.id, false)}
-                      style={{ fontSize: '0.85rem', padding: '0.4rem' }}
-                    >
-                      ❌ Deny
-                    </button>
-                  </div>
-                )}
-                {activeVotes[msg.id] && (
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: 'var(--space-sm)' }}>
-                    Yes: {activeVotes[msg.id].yes} | No: {activeVotes[msg.id].no} | Total: {activeVotes[msg.id].total}
-                  </div>
-                )}
-              </div>
-            )}
-            {msg.message_type !== 'vote_result' && msg.message_type !== 'trade_alert' && (
-              <div className={`chat-message ${msg.is_ai ? 'ai' : (msg.user_id === session.user.id ? 'self' : 'other')}`}>
-                {!msg.is_ai && msg.user_id !== session.user.id && (
-                  <div style={{fontSize: '0.7rem', color: 'var(--text-secondary)', marginBottom: '4px'}}>
-                    {msg.profiles?.username || 'Unknown Trader'}
-                  </div>
-                )}
-                {msg.is_ai && (
-                  <div style={{fontSize: '0.7rem', color: 'var(--accent-cyan)', marginBottom: '4px', fontWeight: 'bold'}}>
-                    🐱 Alpha Meow
-                  </div>
-                )}
-                <div style={{wordBreak: 'break-word'}}>
-                  {parseContent(msg.content)}
-                </div>
-              </div>
-            )}
+            {msg.is_ai && <div className="message-author ai-name">Alpha Meow</div>}
+            <div>{parseContent(msg.content)}</div>
           </div>
         ))}
         <div ref={messagesEndRef} />
       </div>
 
-      <form onSubmit={sendMessage} style={{ display: 'flex', gap: 'var(--space-sm)' }}>
-        <input 
-          type="text" 
-          value={newMessage}
-          onChange={(e) => setNewMessage(e.target.value)}
-          placeholder="Type a message or @alphameow..." 
-          style={{ flex: 1 }}
-        />
-        <button type="submit" className="btn btn-primary" style={{ padding: '0.5rem' }}>
-          <Play size={20} />
+      <form className="chat-form" onSubmit={sendMessage}>
+        <input value={newMessage} onChange={(event) => setNewMessage(event.target.value)} placeholder="Debate a trade or @alphameow..." maxLength={1200} />
+        <button type="submit" className="btn btn-primary icon-only" aria-label="Send message" disabled={!newMessage.trim()}>
+          <Send size={20} />
         </button>
       </form>
     </div>
