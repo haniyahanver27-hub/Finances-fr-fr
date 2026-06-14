@@ -1,8 +1,10 @@
-import React from 'react';
-
 const AboutPage = () => {
   return (
-    <div className="animate-fade-in">
+    <div className="about-page animate-fade-in">
+      <div className="money-bill bill-one" aria-hidden="true">$</div>
+      <div className="money-bill bill-two" aria-hidden="true">$</div>
+      <div className="money-bill bill-three" aria-hidden="true">$</div>
+
       <h1 className="text-center" style={{marginTop: '2rem'}}>Future Fortune Hack</h1>
       <p className="text-center text-muted" style={{marginBottom: '2rem'}}>Your Clan Awaits</p>
       

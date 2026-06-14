@@ -1,5 +1,3 @@
-import React from 'react';
-
 const InfoCenterPage = () => {
   return (
     <div className="animate-fade-in">

@@ -1,5 +1,3 @@
-import React from 'react';
-
 const CampusStandings = () => {
   return (
     <div className="animate-slide-up">

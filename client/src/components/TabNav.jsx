@@ -1,4 +1,3 @@
-import React from 'react';
 import { Home, MessageCircle, TrendingUp, Trophy, Gamepad2 } from 'lucide-react';
 
 const TabNav = ({ activeTab, setActiveTab }) => {

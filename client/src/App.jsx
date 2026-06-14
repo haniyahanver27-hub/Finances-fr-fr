@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from './supabaseClient';
 import TabNav from './components/TabNav';
 import AboutPage from './pages/AboutPage';
@@ -8,7 +8,7 @@ import CampusStandings from './pages/CampusStandings';
 import InfoCenterPage from './pages/InfoCenterPage';
 import AuthModal from './components/AuthModal';
 import ClanSetup from './components/ClanSetup';
-// import AlphaMeow from './components/AlphaMeow'; // To be added later
+import AlphaMeow from './components/AlphaMeow';
 
 function App() {
   const [activeTab, setActiveTab] = useState('about');
@@ -16,6 +16,24 @@ function App() {
   const [demoUser, setDemoUser] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
   const [loading, setLoading] = useState(true);
+
+  const fetchProfile = useCallback(async (userId) => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*, clans(*)')
+        .eq('id', userId)
+        .single();
+
+      if (!error && data) {
+        setUserProfile(data);
+      }
+    } catch (err) {
+      console.error('Error fetching profile:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     // Check active session
@@ -33,25 +51,7 @@ function App() {
     });
 
     return () => subscription.unsubscribe();
-  }, []);
-
-  const fetchProfile = async (userId) => {
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*, clans(*)')
-        .eq('id', userId)
-        .single();
-        
-      if (!error && data) {
-        setUserProfile(data);
-      }
-    } catch (err) {
-      console.error('Error fetching profile:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [fetchProfile]);
 
   const renderTab = () => {
     switch (activeTab) {
@@ -87,14 +87,14 @@ function App() {
       {!isAuth && <AuthModal onAuthSuccess={() => {}} onDemoLogin={handleDemoLogin} />}
       
       {isAuth && !userProfile?.clan_id && (
-        <ClanSetup user={(session || {user: demoUser}).user} onClanJoined={(clan) => fetchProfile((session || {user: demoUser}).user.id)} />
+        <ClanSetup user={(session || {user: demoUser}).user} onClanJoined={() => fetchProfile((session || {user: demoUser}).user.id)} />
       )}
       
       <main className="content-area">
         {renderTab()}
       </main>
       
-      {/* <AlphaMeow /> */}
+      {isAuth && <AlphaMeow />}
       
       <TabNav activeTab={activeTab} setActiveTab={setActiveTab} />
     </div>

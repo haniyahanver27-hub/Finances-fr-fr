@@ -1,5 +1,3 @@
-import React from 'react';
-
 const MarketFloorPage = () => {
   return (
     <div className="animate-fade-in">

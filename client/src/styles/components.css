@@ -1,3 +1,72 @@
+/* Main Page */
+.about-page {
+  position: relative;
+  min-height: calc(100vh - var(--nav-height) - (var(--space-md) * 2));
+  overflow: hidden;
+}
+
+.about-page > *:not(.money-bill) {
+  position: relative;
+  z-index: 1;
+}
+
+.money-bill {
+  position: absolute;
+  width: clamp(130px, 18vw, 230px);
+  aspect-ratio: 2.25 / 1;
+  border: 2px solid rgba(16, 185, 129, 0.65);
+  border-radius: var(--radius-sm);
+  background:
+    radial-gradient(circle at 50% 50%, rgba(16, 185, 129, 0.38) 0 18%, transparent 19%),
+    linear-gradient(135deg, rgba(16, 185, 129, 0.26), rgba(6, 182, 212, 0.16));
+  box-shadow: 0 18px 45px rgba(16, 185, 129, 0.16);
+  color: rgba(255, 255, 255, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-heading);
+  font-size: clamp(3rem, 7vw, 6rem);
+  font-weight: 900;
+  pointer-events: none;
+}
+
+.money-bill::before,
+.money-bill::after {
+  content: '';
+  position: absolute;
+  inset: 12%;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: var(--radius-sm);
+}
+
+.money-bill::after {
+  inset: auto;
+  width: 14%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.bill-one {
+  left: max(-44px, -4vw);
+  top: 118px;
+  transform: rotate(-17deg);
+}
+
+.bill-two {
+  right: max(-58px, -5vw);
+  top: 34px;
+  transform: rotate(15deg);
+}
+
+.bill-three {
+  right: 11%;
+  bottom: 24%;
+  width: clamp(110px, 15vw, 190px);
+  transform: rotate(-8deg);
+  opacity: 0.82;
+}
+
 /* Jargon Highlighting */
 .jargon-highlight {
   color: var(--accent-cyan);
@@ -71,25 +140,26 @@
 /* Alpha Meow Widget */
 .alpha-meow-widget {
   position: fixed;
-  right: -10px;
+  right: -14px;
   top: 50%;
   transform: translateY(-50%);
-  width: 60px;
-  height: 60px;
-  background: var(--bg-secondary);
-  border: 2px solid var(--accent-cyan);
+  width: 82px;
+  height: 82px;
+  background: linear-gradient(135deg, var(--bg-secondary), var(--bg-tertiary));
+  border: 3px solid var(--accent-cyan);
   border-radius: 50%;
-  box-shadow: 0 0 15px rgba(6, 182, 212, 0.4);
+  box-shadow: 0 0 24px rgba(6, 182, 212, 0.45);
   z-index: 1000;
   cursor: pointer;
   transition: all 0.3s ease;
   display: flex;
   justify-content: center;
   align-items: center;
-  font-size: 1.5rem;
+  color: var(--accent-cyan);
 }
 
-.alpha-meow-widget:hover {
+.alpha-meow-widget:hover,
+.alpha-meow-widget.thinking {
   right: 10px;
   transform: translateY(-50%) scale(1.1);
   box-shadow: 0 0 25px rgba(6, 182, 212, 0.6);
@@ -101,6 +171,78 @@
   top: 50%;
   transform: translateY(-50%);
   width: 300px;
-  height: 400px;
+  min-height: 150px;
+  max-height: 260px;
   z-index: 999;
+  padding: var(--space-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  overflow-y: auto;
+}
+
+.meow-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  color: var(--accent-cyan);
+  font-family: var(--font-heading);
+  font-size: 0.9rem;
+}
+
+.meow-panel-header span {
+  color: var(--text-secondary);
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+}
+
+.meow-chat-panel p {
+  color: var(--text-primary);
+  font-size: 0.95rem;
+}
+
+@media (max-width: 640px) {
+  .alpha-meow-widget {
+    right: var(--space-md);
+    top: auto;
+    bottom: calc(var(--nav-height) + var(--space-md));
+    transform: none;
+    width: 72px;
+    height: 72px;
+  }
+
+  .alpha-meow-widget:hover,
+  .alpha-meow-widget.thinking {
+    right: var(--space-md);
+    transform: scale(1.05);
+  }
+
+  .meow-chat-panel {
+    right: var(--space-md);
+    left: var(--space-md);
+    top: auto;
+    bottom: calc(var(--nav-height) + 5rem);
+    width: auto;
+    transform: none;
+  }
+
+  .money-bill {
+    width: clamp(105px, 34vw, 150px);
+  }
+
+  .bill-one {
+    left: -56px;
+    top: 122px;
+  }
+
+  .bill-two {
+    right: -62px;
+    top: 40px;
+  }
+
+  .bill-three {
+    right: 6%;
+    bottom: 16%;
+  }
 }

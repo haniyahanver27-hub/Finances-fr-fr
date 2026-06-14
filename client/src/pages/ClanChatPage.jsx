@@ -1,18 +1,43 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 import { Play } from 'lucide-react';
+import { fetchAlphaMeowReply, playAlphaMeowSound } from '../utils/alphaMeow';
+
+const FINANCIAL_KEYWORDS = ['diversification', 'portfolio', 'shorting', 'bull market', 'bear market', 'dividend', 'etf', 'ipo', 'options', 'margin', 'volatility'];
 
 const ClanChatPage = ({ session, profile }) => {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
-  const [keywords, setKeywords] = useState([]);
+  const [keywords, setKeywords] = useState(FINANCIAL_KEYWORDS);
   const messagesEndRef = useRef(null);
+  const localIdRef = useRef(0);
 
   const clanId = profile?.clan_id;
+  const isDemo = session?.user?.id?.startsWith('demo-');
+
+  const nextLocalId = (prefix) => {
+    localIdRef.current += 1;
+    return `${prefix}-${localIdRef.current}`;
+  };
 
   // Load keywords and initial messages
   useEffect(() => {
     if (!clanId) return;
+
+    if (isDemo) {
+      const fetchDemoData = async () => {
+        setMessages([
+          {
+            id: 'demo-alpha-welcome',
+            content: 'Alpha Meow is awake. Try @alphameow with any finance question.',
+            is_ai: true,
+          },
+        ]);
+      };
+
+      fetchDemoData();
+      return;
+    }
 
     const fetchInitialData = async () => {
       // 1. Fetch keywords from backend proxy (which reads financialKeywords.json)
@@ -21,14 +46,13 @@ const ClanChatPage = ({ session, profile }) => {
         // For now, let's just use a hardcoded list of terms to highlight to save a fetch, or fetch them if needed
         // The PRD says "parses text for known keywords from a local array client-side"
         // I will define a small client-side dictionary of terms to parse:
-        const localKeywords = ['diversification', 'portfolio', 'shorting', 'bull market', 'bear market', 'dividend', 'etf', 'ipo', 'options', 'margin', 'volatility'];
-        setKeywords(localKeywords);
-      } catch (e) {
+        setKeywords(FINANCIAL_KEYWORDS);
+      } catch {
         console.error("Failed to load keywords");
       }
 
       // 2. Fetch last 50 messages
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from('messages')
         .select(`
           id, content, timestamp, is_ai, user_id,
@@ -70,7 +94,7 @@ const ClanChatPage = ({ session, profile }) => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [clanId]);
+  }, [clanId, isDemo]);
 
   // Auto-scroll
   useEffect(() => {
@@ -83,42 +107,54 @@ const ClanChatPage = ({ session, profile }) => {
 
     const content = newMessage;
     setNewMessage('');
-
-    // 1. Insert user message to DB
-    const { error } = await supabase.from('messages').insert([{
+    const localUserMessage = {
+      id: nextLocalId('local-user'),
       clan_id: clanId,
       user_id: session.user.id,
-      content: content,
-      is_ai: false
-    }]);
+      content,
+      is_ai: false,
+      profiles: { username: profile?.username },
+    };
 
-    if (error) {
-      console.error('Error sending message:', error);
-      return;
+    if (isDemo) {
+      setMessages(prev => [...prev, localUserMessage]);
+    }
+
+    // 1. Insert user message to DB
+    if (!isDemo) {
+      const { error } = await supabase.from('messages').insert([{
+        clan_id: clanId,
+        user_id: session.user.id,
+        content: content,
+        is_ai: false
+      }]);
+
+      if (error) {
+        console.error('Error sending message:', error);
+        setMessages(prev => [...prev, localUserMessage]);
+      }
     }
 
     // 2. If message mentions @alphameow, call AI
     if (content.toLowerCase().includes('@alphameow')) {
-      try {
-        const aiResponse = await fetch('/api/ai/chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            message: content,
-            context: messages.slice(-5) // Send last 5 messages for context
-          })
-        });
-        const data = await aiResponse.json();
+      playAlphaMeowSound();
+      const reply = await fetchAlphaMeowReply(content, messages.slice(-5));
 
-        if (data.reply) {
+      if (reply) {
+        if (isDemo) {
+          setMessages(prev => [...prev, {
+            id: nextLocalId('local-alpha'),
+            clan_id: clanId,
+            content: reply,
+            is_ai: true,
+          }]);
+        } else {
           await supabase.from('messages').insert([{
             clan_id: clanId,
-            content: data.reply,
+            content: reply,
             is_ai: true
           }]);
         }
-      } catch (err) {
-        console.error("Alpha Meow is sleeping", err);
       }
     }
   };
@@ -132,18 +168,25 @@ const ClanChatPage = ({ session, profile }) => {
       });
       const data = await response.json();
       
-      // We will make Alpha Meow say it in chat!
-      await supabase.from('messages').insert([{
+      const alphaMessageContent = {
         clan_id: clanId,
         content: `**${data.term.toUpperCase()}**: ${data.definition ? data.definition + " " : ""}${data.analogy}`,
         is_ai: true
-      }]);
+      };
+
+      const alphaMessage = {
+        id: nextLocalId('local-jargon'),
+        ...alphaMessageContent
+      };
+
+      if (isDemo) {
+        setMessages(prev => [...prev, alphaMessage]);
+      } else {
+        await supabase.from('messages').insert([alphaMessageContent]);
+      }
 
       // Trigger SFX (Meow)
-      const sfxResponse = await fetch('/api/sfx/meow', { method: 'POST' });
-      const blob = await sfxResponse.blob();
-      const audioUrl = URL.createObjectURL(blob);
-      new Audio(audioUrl).play();
+      playAlphaMeowSound();
     } catch (err) {
       console.error("Failed to explain jargon", err);
     }
