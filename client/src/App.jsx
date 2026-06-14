@@ -8,7 +8,7 @@ import CampusStandings from './pages/CampusStandings';
 import InfoCenterPage from './pages/InfoCenterPage';
 import AuthModal from './components/AuthModal';
 import ClanSetup from './components/ClanSetup';
-import AlphaMeow from './components/AlphaMeow';
+import FloatingMascot from './components/FloatingMascot';
 
 function App() {
   const [activeTab, setActiveTab] = useState('about');
@@ -55,12 +55,12 @@ function App() {
 
   const renderTab = () => {
     switch (activeTab) {
-      case 'about': return <AboutPage />;
+      case 'about': return <AboutPage onNavigateToChat={() => setActiveTab('chat')} />;
       case 'chat': return <ClanChatPage session={session || {user: demoUser}} profile={userProfile} />;
       case 'market': return <MarketFloorPage />;
       case 'ranks': return <CampusStandings />;
       case 'info': return <InfoCenterPage />;
-      default: return <AboutPage />;
+      default: return <AboutPage onNavigateToChat={() => setActiveTab('chat')} />;
     }
   };
 
@@ -94,9 +94,9 @@ function App() {
         {renderTab()}
       </main>
       
-      {isAuth && <AlphaMeow />}
-      
       <TabNav activeTab={activeTab} setActiveTab={setActiveTab} />
+      
+      {isAuth && <FloatingMascot onClick={() => setActiveTab('chat')} />}
     </div>
   );
 }

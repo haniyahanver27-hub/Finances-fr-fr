@@ -21,18 +21,14 @@ router.use(ttsLimiter);
 // @route POST /api/sfx/generate
 // @desc Generate an arbitrary sound effect
 router.post('/generate', async (req, res) => {
-  const { text, durationSeconds, promptInfluence } = req.body;
+  const { text } = req.body;
   
   if (!text) {
     return res.status(400).json({ error: 'Text prompt is required' });
   }
 
   try {
-    const audioBuffer = await sfxService.generateSoundEffect(
-      text, 
-      durationSeconds || 2.0, 
-      promptInfluence || 0.3
-    );
+    const audioBuffer = await sfxService.generateSoundEffect(text);
     
     res.set({
       'Content-Type': 'audio/mpeg',
@@ -48,8 +44,8 @@ router.post('/generate', async (req, res) => {
 // @desc Generate a cash register or coin sound effect for trades
 router.post('/trade', async (req, res) => {
   try {
-    const prompt = "A loud, satisfying vintage cash register cha-ching sound indicating a successful transaction";
-    const audioBuffer = await sfxService.generateSoundEffect(prompt, 1.5, 0.4);
+    const prompt = "A satisfying cash register cha-ching sound effect";
+    const audioBuffer = await sfxService.generateSoundEffect(prompt);
     
     res.set({
       'Content-Type': 'audio/mpeg',
@@ -65,8 +61,8 @@ router.post('/trade', async (req, res) => {
 // @desc Generate an Alpha Meow cat sound
 router.post('/meow', async (req, res) => {
   try {
-    const prompt = "An aggressive, slightly chaotic but cute cat meow";
-    const audioBuffer = await sfxService.generateSoundEffect(prompt, 1.0, 0.3);
+    const prompt = "Alpha Meow here! Let's get this bread!";
+    const audioBuffer = await sfxService.generateSoundEffect(prompt);
     
     res.set({
       'Content-Type': 'audio/mpeg',

@@ -9,6 +9,10 @@ const ClanChatPage = ({ session, profile }) => {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [keywords, setKeywords] = useState(FINANCIAL_KEYWORDS);
+  const [clanBalance, setClanBalance] = useState(100000);
+  const [positions, setPositions] = useState([]);
+  const [activeVotes, setActiveVotes] = useState({});
+  const [userVotes, setUserVotes] = useState({});
   const messagesEndRef = useRef(null);
   const localIdRef = useRef(0);
 
@@ -51,7 +55,32 @@ const ClanChatPage = ({ session, profile }) => {
         console.error("Failed to load keywords");
       }
 
-      // 2. Fetch last 50 messages
+      // 2. Fetch clan portfolio data
+      try {
+        const posRes = await fetch(`/api/trades/positions/${clanId}`);
+        const posData = await posRes.json();
+        if (posData.cash !== undefined) setClanBalance(posData.cash);
+        if (posData.positions) setPositions(posData.positions);
+      } catch (err) {
+        console.error("Failed to fetch positions:", err);
+      }
+
+      // 3. Fetch active trade proposals
+      try {
+        const propsRes = await fetch(`/api/trades/proposals/${clanId}`);
+        const propsData = await propsRes.json();
+        if (propsData.proposals) {
+          const voteMap = {};
+          propsData.proposals.forEach(p => {
+            voteMap[p.id] = { yes: 0, no: 0, total: 0 };
+          });
+          setActiveVotes(voteMap);
+        }
+      } catch (err) {
+        console.error("Failed to fetch proposals:", err);
+      }
+
+      // 4. Fetch last 50 messages
       const { data } = await supabase
         .from('messages')
         .select(`
@@ -192,6 +221,36 @@ const ClanChatPage = ({ session, profile }) => {
     }
   };
 
+  const handleVote = async (proposalId, voteYes) => {
+    try {
+      const response = await fetch('/api/trades/vote', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          proposal_id: proposalId,
+          user_id: session.user.id,
+          vote: voteYes
+        })
+      });
+      const data = await response.json();
+      
+      if (response.ok) {
+        setUserVotes(prev => ({ ...prev, [proposalId]: voteYes }));
+        if (data.voteCount) {
+          setActiveVotes(prev => ({
+            ...prev,
+            [proposalId]: data.voteCount
+          }));
+        }
+        if (data.proposalStatus === 'passed') {
+          playAlphaMeowSound();
+        }
+      }
+    } catch (err) {
+      console.error("Failed to vote:", err);
+    }
+  };
+
   // Helper to highlight jargon in text
   const parseContent = (content) => {
     if (!content) return '';
@@ -229,26 +288,80 @@ const ClanChatPage = ({ session, profile }) => {
   return (
     <div className="animate-slide-up" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <div className="glass-panel" style={{padding: 'var(--space-sm) var(--space-md)', marginBottom: 'var(--space-md)'}}>
-        <h3 style={{fontSize: '1.2rem'}}>{profile.clans?.name || 'Clan'}</h3>
-        <p className="text-muted" style={{fontSize: '0.8rem'}}>Invite Code: <strong>{profile.clans?.invite_code}</strong></p>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-sm)' }}>
+          <div>
+            <h3 style={{fontSize: '1.2rem', margin: 0}}>{profile.clans?.name || 'Clan'}</h3>
+            <p className="text-muted" style={{fontSize: '0.8rem', margin: '4px 0 0 0'}}>Invite Code: <strong>{profile.clans?.invite_code}</strong></p>
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Portfolio Value</div>
+            <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: 'var(--accent-green)' }}>
+              ${clanBalance?.toLocaleString('en-US', { maximumFractionDigits: 2 })}
+            </div>
+          </div>
+        </div>
+        {positions.length > 0 && (
+          <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+            Holdings: {positions.map(p => `${p.quantity.toFixed(2)} ${p.symbol}`).join(', ')}
+          </div>
+        )}
       </div>
       
       <div className="chat-container" style={{ flex: 1, overflowY: 'auto', marginBottom: 'var(--space-md)' }}>
         {messages.map((msg) => (
-          <div key={msg.id} className={`chat-message ${msg.is_ai ? 'ai' : (msg.user_id === session.user.id ? 'self' : 'other')}`}>
-            {!msg.is_ai && msg.user_id !== session.user.id && (
-              <div style={{fontSize: '0.7rem', color: 'var(--text-secondary)', marginBottom: '4px'}}>
-                {msg.profiles?.username || 'Unknown Trader'}
+          <div key={msg.id}>
+            {msg.message_type === 'vote_result' && (
+              <div className="glass-panel" style={{ padding: 'var(--space-sm)', marginBottom: 'var(--space-md)', backgroundColor: 'rgba(16, 185, 129, 0.1)' }}>
+                <div style={{ fontSize: '0.85rem' }}>{msg.content}</div>
               </div>
             )}
-            {msg.is_ai && (
-              <div style={{fontSize: '0.7rem', color: 'var(--accent-cyan)', marginBottom: '4px', fontWeight: 'bold'}}>
-                🐱 Alpha Meow
+            {msg.message_type === 'trade_alert' && !msg.content.includes('Vote PASSED') && !msg.content.includes('Vote FAILED') && (
+              <div className="vote-card glass-panel" style={{ padding: 'var(--space-md)', marginBottom: 'var(--space-md)' }}>
+                <div style={{ fontSize: '0.9rem', fontWeight: 'bold', marginBottom: 'var(--space-sm)' }}>
+                  {msg.content}
+                </div>
+                {activeVotes[msg.id]?.total < 3 && !userVotes[msg.id] && (
+                  <div className="vote-buttons">
+                    <button 
+                      className="btn btn-primary" 
+                      onClick={() => handleVote(msg.id, true)}
+                      style={{ fontSize: '0.85rem', padding: '0.4rem' }}
+                    >
+                      ✅ Approve
+                    </button>
+                    <button 
+                      className="btn btn-secondary" 
+                      onClick={() => handleVote(msg.id, false)}
+                      style={{ fontSize: '0.85rem', padding: '0.4rem' }}
+                    >
+                      ❌ Deny
+                    </button>
+                  </div>
+                )}
+                {activeVotes[msg.id] && (
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: 'var(--space-sm)' }}>
+                    Yes: {activeVotes[msg.id].yes} | No: {activeVotes[msg.id].no} | Total: {activeVotes[msg.id].total}
+                  </div>
+                )}
               </div>
             )}
-            <div style={{wordBreak: 'break-word'}}>
-              {parseContent(msg.content)}
-            </div>
+            {msg.message_type !== 'vote_result' && msg.message_type !== 'trade_alert' && (
+              <div className={`chat-message ${msg.is_ai ? 'ai' : (msg.user_id === session.user.id ? 'self' : 'other')}`}>
+                {!msg.is_ai && msg.user_id !== session.user.id && (
+                  <div style={{fontSize: '0.7rem', color: 'var(--text-secondary)', marginBottom: '4px'}}>
+                    {msg.profiles?.username || 'Unknown Trader'}
+                  </div>
+                )}
+                {msg.is_ai && (
+                  <div style={{fontSize: '0.7rem', color: 'var(--accent-cyan)', marginBottom: '4px', fontWeight: 'bold'}}>
+                    🐱 Alpha Meow
+                  </div>
+                )}
+                <div style={{wordBreak: 'break-word'}}>
+                  {parseContent(msg.content)}
+                </div>
+              </div>
+            )}
           </div>
         ))}
         <div ref={messagesEndRef} />

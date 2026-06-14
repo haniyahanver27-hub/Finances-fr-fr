@@ -86,17 +86,37 @@ const playSynthMeow = async () => {
 
 export const playAlphaMeowSound = async () => {
   try {
-    const response = await fetchWithTimeout('/api/sfx/meow', { method: 'POST' }, 700);
-    if (!response.ok) throw new Error(`Meow SFX returned ${response.status}`);
+    const response = await fetchWithTimeout('/api/sfx/meow', { method: 'POST' }, 5000);
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`Meow SFX Error ${response.status}:`, errorText);
+      throw new Error(`Meow SFX returned ${response.status}`);
+    }
 
     const contentType = response.headers.get('content-type') || '';
-    if (!contentType.startsWith('audio/')) throw new Error('Meow SFX was not audio');
+    if (!contentType.includes('audio')) {
+      console.warn('Response was not audio:', contentType);
+      throw new Error('Meow SFX was not audio');
+    }
 
     const blob = await response.blob();
+    if (blob.size === 0) {
+      throw new Error('Audio blob is empty');
+    }
+
     const audioUrl = URL.createObjectURL(blob);
     const audio = new Audio(audioUrl);
     audio.addEventListener('ended', () => URL.revokeObjectURL(audioUrl), { once: true });
-    await audio.play();
+    audio.addEventListener('error', (e) => {
+      console.error('Audio playback error:', e);
+      URL.revokeObjectURL(audioUrl);
+    });
+    
+    await audio.play().catch(err => {
+      console.warn('Audio play failed, using synth fallback:', err);
+      return playSynthMeow();
+    });
     return true;
   } catch (error) {
     console.warn('Using local Alpha Meow sound:', error);

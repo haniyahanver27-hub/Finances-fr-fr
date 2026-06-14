@@ -10,6 +10,10 @@
   z-index: 1;
 }
 
+.about-page .money-rain-container {
+  z-index: 0;
+}
+
 .money-bill {
   position: absolute;
   width: clamp(130px, 18vw, 230px);

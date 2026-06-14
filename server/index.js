@@ -18,10 +18,11 @@ app.use(express.json());
 app.use('/api/ai', require('./routes/ai'));
 app.use('/api/sfx', require('./routes/sfx'));
 app.use('/api/stocks', require('./routes/stocks'));
+app.use('/api/trades', require('./routes/trades'));
 
 // Health check
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', message: 'Future Fortune Hack Express Proxy is running' });
+  res.json({ status: 'ok', message: 'PROJECT ALPHA Express Proxy is running' });
 });
 
 const server = app.listen(PORT, HOST, () => {
